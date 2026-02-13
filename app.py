@@ -6,7 +6,7 @@ import datetime
 import math
 
 # --- 0. 页面配置 ---
-st.set_page_config(page_title="智能排班 V19.0 (紧急修复版)", layout="wide", page_icon="💎")
+st.set_page_config(page_title="AI智能排班系统 V19.0 [DAIXUAN]", layout="wide", page_icon="💎")
 
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
@@ -76,7 +76,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("💎 智能排班 V19.0 - 紧急修复版")
+st.title("💎 AI智能排班系统 V19.0 [DAIXUAN]")
 
 # --- 工具函数 ---
 def get_date_tuple(start_date, end_date):
@@ -438,7 +438,7 @@ def solve_schedule_v19():
                         if 0 <= d < num_days:
                             actual = res_matrix[real_idx][d]
                             if actual != off_shift_name:
-                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}</div>")
+                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}</div>，为满足硬性条件规则 随机安排")
                                 spec_rest_fail += 1
                 except: pass
         if spec_rest_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 指定休息日全部满足</div>")
@@ -483,6 +483,7 @@ def solve_schedule_v19():
                 audit_logs.append(f"<div class='log-item log-err'>❌ {e_name} 连班 {m_c} 天 (限 {max_consecutive})</div>")
                 cons_fail += 1
         if cons_fail == 0: audit_logs.append(f"<div class='log-item log-pass'>✅ 连班检测通过 (上限 {max_consecutive})</div>")
+            
         # 8. 新增：晚转早检测 (疲劳审计)
         if enable_no_night_to_day: # 只有开启了这个功能才检测
             audit_logs.append("<div class='log-header'>8. 🌙 晚转早检测 (Fatigue)</div>")
@@ -494,7 +495,7 @@ def solve_schedule_v19():
                     
                     # 检查：今天晚班 AND 明天早班
                     if today_shift == night_shift and tomorrow_shift == day_shift:
-                        audit_logs.append(f"<div class='log-item log-err'>❌ {e_name}: 第{d+1}天{night_shift} -> 第{d+2}天{day_shift} (严重疲劳)</div>")
+                        audit_logs.append(f"<div class='log-item log-err'>❌ {e_name}: 第{d+1}天{night_shift} -> 第{d+2}天{day_shift} (严重疲劳 硬性条件规则导致)</div>")
                         fatigue_fail += 1
             
             if fatigue_fail == 0:
