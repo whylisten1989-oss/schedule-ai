@@ -278,10 +278,7 @@ def solve_schedule_v19():
     # S2. 休息模式
     for e in range(len(employees)):
         actual_rest = sum(shift_vars[(e, d, off_idx)] for d in range(num_days))
-        diff_rest = model.NewIntVar(0, num_days, f'diff_r_{e}')
-        model.Add(diff_rest >= actual_rest - target_off_days)
-        model.Add(diff_rest >= target_off_days - actual_rest)
-        penalties.append(diff_rest * W_REST_STRICT)
+        model.Add(actual_rest == target_off_days)
 
     # S3. 活动需求
     for idx, row in edited_activity.iterrows():
@@ -419,27 +416,37 @@ def solve_schedule_v19():
                 rest_fail += 1
         if rest_fail == 0: audit_logs.append(f"<div class='log-item log-pass'>✅ 全员休息天数达标 ({target_off_days}天)</div>")
 
-        # 4. 指定休息日
+        
+        # 审计4: 指定休息日 (增强版：含越界检查)
+        audit_logs.append("<div class='log-header'>4. 🧘 指定休息日检测</div>")
         spec_rest_fail = 0
         for idx, row in edited_df.iterrows():
             name = row["姓名"]
-            # 【关键修改】通过名字找真实的索引，而不是用 idx
-            real_idx = name_map.get(name) 
-            if real_idx is None: continue 
+            real_idx = name_map.get(name)
+            if real_idx is None: continue
             
             req_off = str(row["指定休息日"])
             if req_off.strip():
                 try:
+                    # 解析用户输入的数字
                     days = [int(x)-1 for x in req_off.replace("，",",").split(",") if x.strip().isdigit()]
                     for d in days:
+                        # 情况A: 用户填写的数字在当前日期范围内 (正常检查)
                         if 0 <= d < num_days:
-                            # 使用 real_idx 去查表
                             actual = res_matrix[real_idx][d]
                             if actual != off_shift_name:
-                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}</div>")
+                                date_str = date_headers_simple[d] # 获取具体日期显示，如 "02-13 周五"
+                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定在 {date_str} (第{d+1}天) 休息，但排了: {actual}</div>")
                                 spec_rest_fail += 1
-                except: pass
-        if spec_rest_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 指定休息日全部满足</div>")
+                        
+                        # 情况B: 用户填写的数字超出了当前日期范围 (新增报错)
+                        else:
+                            audit_logs.append(f"<div class='log-item log-warn'>⚠️ {name} 指定第 {d+1} 天休息，但当前排班只有 {num_days} 天 (已忽略)</div>")
+                            # 注意：这里不算 fail，但要提示用户
+                except: 
+                    audit_logs.append(f"<div class='log-item log-warn'>⚠️ {name} 的休息日格式输入错误</div>")
+        
+        if spec_rest_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 指定休息日全部满足 (范围内)</div>")
 
         # 5. 每日平衡
         audit_logs.append("<div class='log-header'>5. ⚖️ 每日平衡检测</div>")
