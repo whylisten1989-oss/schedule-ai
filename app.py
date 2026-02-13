@@ -438,7 +438,7 @@ def solve_schedule_v19():
                         if 0 <= d < num_days:
                             actual = res_matrix[real_idx][d]
                             if actual != off_shift_name:
-                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}</div>，为满足硬性条件规则 随机安排")
+                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}，为满足硬性条件规则 随机安排</div>")
                                 spec_rest_fail += 1
                 except: pass
         if spec_rest_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 指定休息日全部满足</div>")
