@@ -5,8 +5,8 @@ import io
 import datetime
 import math
 
-# --- 0. 页面配置与 UI 重构 (去除丑陋边框，采用现代阴影) ---
-st.set_page_config(page_title="智能排班 V14.0 (最终修正版)", layout="wide", page_icon="⚖️")
+# --- 0. 页面配置与 UI ---
+st.set_page_config(page_title="智能排班 V15.0 (严苛审计版)", layout="wide", page_icon="🛡️")
 
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
@@ -15,71 +15,44 @@ if 'audit_report' not in st.session_state:
 
 st.markdown("""
     <style>
-    /* 全局字体与背景 */
-    .stApp {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        background-color: #f7f9fc;
-    }
+    /* 全局设置 */
+    .stApp {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8;}
     
-    /* 1. 卡片式布局 (替代丑陋的边框) */
+    /* 卡片风格 */
     .css-card {
-        background-color: white;
-        padding: 24px;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* 柔和阴影 */
-        margin-bottom: 20px;
-        border: 1px solid #edf2f7; /* 极淡的边框 */
+        background-color: white; padding: 20px; border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px;
+        border: 1px solid #e1e4e8;
     }
     .card-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: #1a202c;
-        margin-bottom: 16px;
-        border-left: 4px solid #3182ce; /* 左侧蓝色条点缀 */
-        padding-left: 10px;
+        font-size: 16px; font-weight: 700; color: #2d3748; 
+        margin-bottom: 15px; padding-left: 10px; border-left: 4px solid #3182ce;
     }
     
-    /* 2. 输入框美化 (统一风格) */
-    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div {
-        border-radius: 6px;
-        border: 1px solid #e2e8f0;
-    }
-    
-    /* 3. 生成按钮 (全宽、悬浮感) */
+    /* 按钮美化 */
     .stButton > button {
-        width: 100%;
-        background-color: #3182ce !important;
-        color: white !important;
-        font-size: 18px !important;
-        font-weight: 600 !important;
-        padding: 16px 0 !important;
-        border-radius: 8px !important;
-        border: none !important;
-        box-shadow: 0 4px 6px rgba(49, 130, 206, 0.3);
-        transition: all 0.2s;
+        width: 100%; background-color: #2b6cb0 !important; color: white !important;
+        font-size: 18px !important; padding: 16px 0 !important; border-radius: 8px !important;
+        border: none !important; transition: 0.2s;
     }
-    .stButton > button:hover {
-        background-color: #2b6cb0 !important;
-        transform: translateY(-1px);
-        box-shadow: 0 6px 8px rgba(49, 130, 206, 0.4);
-    }
+    .stButton > button:hover {background-color: #2c5282 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15);}
     
-    /* 4. 审计日志区 */
-    .audit-box {
-        background-color: #2d3748;
-        color: #68d391;
-        padding: 16px;
-        border-radius: 8px;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 1.6;
-        max-height: 300px;
-        overflow-y: auto;
+    /* 审计日志 - 极客风 */
+    .audit-container {
+        background-color: #1a202c; color: #e2e8f0; padding: 15px; 
+        border-radius: 8px; font-family: 'Consolas', monospace; font-size: 13px;
+        max-height: 400px; overflow-y: auto; border: 1px solid #4a5568;
     }
-    .log-err {color: #fc8181; font-weight: bold;}
-    .log-warn {color: #f6ad55;}
+    .log-err {color: #fc8181; font-weight: bold; background-color: #2d3748; padding: 2px 5px; border-radius: 3px;}
+    .log-warn {color: #f6ad55; font-weight: bold;}
+    .log-pass {color: #68d391; font-weight: bold;}
+    .log-info {color: #63b3ed;}
+    .log-section {border-top: 1px dashed #4a5568; margin-top: 5px; padding-top: 5px; color: #a0aec0;}
+
+    /* 输入框样式 */
+    input, textarea, select {border: 1px solid #cbd5e0 !important; border-radius: 5px !important;}
     
-    /* 5. 表格居中 */
+    /* 表格居中 */
     div[data-testid="stDataFrame"] div[role="grid"] div[role="gridcell"],
     div[data-testid="stDataFrame"] div[role="grid"] div[role="columnheader"] {
         justify-content: center !important; text-align: center !important;
@@ -87,7 +60,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("⚖️ 智能排班系统 V14.0 - 公平性修正版")
+st.title("🛡️ 智能排班 V15.0 - 严苛审计版")
 
 # --- 工具函数 ---
 def get_date_tuple(start_date, end_date):
@@ -97,12 +70,11 @@ def get_date_tuple(start_date, end_date):
               week_map[(start_date + datetime.timedelta(days=i)).weekday()] ) 
             for i in range(delta.days + 1)]
 
-# --- 1. 侧边栏：基础档案 ---
+# --- 1. 侧边栏 ---
 with st.sidebar:
     st.markdown('<div class="css-card"><div class="card-title">📂 基础档案</div>', unsafe_allow_html=True)
-    
     default_employees = "张三\n李四\n王五\n赵六\n钱七\n孙八\n周九\n吴十\n郑十一\n王十二"
-    emp_input = st.text_area("员工名单 (Excel直接粘贴)", default_employees, height=150)
+    emp_input = st.text_area("员工名单", default_employees, height=150)
     employees = [e.strip() for e in emp_input.replace('\n', ',').replace('，', ',').split(",") if e.strip()]
     
     shifts_input = st.text_input("班次定义 (须含'休')", "早班, 中班, 晚班, 休")
@@ -120,7 +92,24 @@ with st.sidebar:
         with c2: day_shift = st.selectbox("早班", shift_work, index=0)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 2. 主控制区 ---
+# --- 2. 顶部：逻辑透明化 (你要的功能回归了) ---
+with st.expander("🛠️ 查看系统底层逻辑与权重 (上帝视角)", expanded=True):
+    col_w1, col_w2 = st.columns([2, 1])
+    with col_w1:
+        st.markdown("""
+        **当前算法优先级 (权重从高到低):**
+        1.  **🔥 活动/大促需求** (权重: ∞) - *绝对指令*
+        2.  **🚫 0排班禁令** (权重: ∞) - *设为0则绝对不排*
+        3.  **⚖️ 每日人数波动** (权重: **5,000,000**) - *【V15上调】强制拉平每日差异*
+        4.  **🔄 最大连班限制** (权重: 2,000,000) - *红线指标*
+        5.  **🧱 每日基线** (权重: 1,000,000) - *保运营*
+        6.  **🛌 休息模式** (权重: 500,000) - *保休息*
+        7.  **❌ 个人拒绝** (权重: 50,000) - *尽量满足*
+        """)
+    with col_w2:
+        st.info("💡 V15 修正：每日人数波动和最大连班的权重已大幅提升，现在它们比'每日基线'更重要。")
+
+# --- 3. 主控制区 ---
 col_ctrl, col_data = st.columns([1, 1.2])
 
 with col_ctrl:
@@ -134,23 +123,23 @@ with col_ctrl:
     if start_date > end_date: st.error("日期错"); st.stop()
     num_days = (end_date - start_date).days + 1
     
-    rest_mode = st.selectbox("休息模式 (强制目标)", ["做6休1", "做5休2", "自定义"], index=0)
+    rest_mode = st.selectbox("休息模式 (硬指标)", ["做6休1", "做5休2", "自定义"], index=0)
     if rest_mode == "做6休1": target_off_days = num_days // 7
     elif rest_mode == "做5休2": target_off_days = (num_days // 7) * 2
     else: target_off_days = st.number_input(f"周期内应休几天?", min_value=0, value=1)
     
     max_consecutive = st.number_input("最大连班限制", 1, 14, 6)
     
-    # --- 这里是你要求的阈值调整，必须显眼 ---
+    # --- 阈值设置 (显眼位置) ---
     st.markdown("---")
-    st.markdown('<div class="card-title" style="font-size:14px; margin-bottom:10px;">⚖️ 公平性与波动控制 (V14回归)</div>', unsafe_allow_html=True)
-    
+    st.markdown('<div style="background:#e6fffa; padding:10px; border-radius:5px; border:1px solid #38b2ac;">', unsafe_allow_html=True)
+    st.markdown("**⚖️ 平衡性阈值 (严格执行)**")
     c_t1, c_t2 = st.columns(2)
     with c_t1: 
-        diff_daily_threshold = st.number_input("每日人数允许差值", 0, 5, 1, help="周一5人，周二4人，差1 (允许)。差2则罚分。")
+        diff_daily_threshold = st.number_input("每日人数允许差值", 0, 5, 0, help="设为0表示每天该班次人数必须完全一样！")
     with c_t2: 
-        diff_period_threshold = st.number_input("周期班次允许差值", 0, 5, 2, help="张三上5个早班，李四上3个，差2 (允许)。差3则重罚。")
-    
+        diff_period_threshold = st.number_input("员工工时允许差值", 0, 5, 2, help="设为2表示大家班次数量差不能超过2。")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # 智能计算
@@ -161,34 +150,29 @@ suggested_min = math.floor(daily_capacity / len(shift_work))
 with col_data:
     st.markdown('<div class="css-card" style="height: 100%;">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">📊 人力资源看板</div>', unsafe_allow_html=True)
-    
     m1, m2 = st.columns(2)
     m1.metric("总人力", f"{len(employees)} 人")
     m2.metric("总可用工时", f"{total_capacity} 人天")
     m3, m4 = st.columns(2)
     m3.metric("日均运力", f"{daily_capacity:.1f} 人")
-    m4.metric("建议单班基线", f"{suggested_min} 人", delta="推荐值")
-    
-    st.info("💡 为什么之前排班不均？因为系统在满足'基线'后就偷懒了。V14版加入了强力公平算法，会强制把多余的工时平均分配。")
+    m4.metric("建议单班基线", f"{suggested_min} 人")
+    st.caption("注：'建议基线' 仅供参考，如果设得太高会导致无解。")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 3. 详细配置区 ---
+# --- 4. 详细配置区 ---
 col_base, col_req = st.columns([1, 2.5])
 
 with col_base:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">🧱 每日班次基线</div>', unsafe_allow_html=True)
-    st.caption("注：设为 0 = 🚫 绝对禁止排班")
-    
     min_staff_per_shift = {}
     for s in shift_work:
         val = st.number_input(f"{s}", min_value=0, value=suggested_min, key=f"min_{s}_{suggested_min}")
         min_staff_per_shift[s] = val
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # 生成按钮
     st.markdown("###")
-    generate_btn = st.button("🚀 立即生成排班 (执行自检)")
+    generate_btn = st.button("🚀 立即执行严苛排班")
 
 with col_req:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
@@ -225,23 +209,24 @@ with col_req:
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 4. 核心算法 V14 (解决不均衡的根源) ---
-def solve_schedule_v14():
+# --- 5. 核心算法 V15 (权重修正版) ---
+def solve_schedule_v15():
     model = cp_model.CpModel()
     shift_vars = {}
     s_map = {s: i for i, s in enumerate(shifts)}
     off_idx = s_map[off_shift_name]
     penalties = []
     
-    # 权重体系修正：大幅提升公平性的地位
+    # === 权重体系 (彻底修正) ===
+    # 之前平衡性太低，导致被基线覆盖。现在平衡性是顶级权重。
     W_ACTIVITY = 10000000
-    W_BASELINE = 1000000
-    W_CONSECUTIVE = 500000
-    W_REST_STRICT = 200000
-    W_FATIGUE = 100000
-    W_BALANCE = 50000  # <--- 从之前的 1000 提升到 50000，强制 AI 重视公平
-    W_REFUSE = 10000
-    W_REDUCE = 1000
+    W_DAILY_BALANCE = 5000000 # 新增：每日波动权重 (极高)
+    W_CONSECUTIVE = 2000000   # 连班限制
+    W_BASELINE = 1000000      # 日常基线
+    W_REST_STRICT = 500000    # 休息
+    W_PERIOD_BALANCE = 100000 # 员工间差异
+    W_FATIGUE = 50000
+    W_REFUSE = 20000
 
     # 1. 变量
     for e in range(len(employees)):
@@ -271,7 +256,7 @@ def solve_schedule_v14():
             model.Add(sum(window) <= max_consecutive).OnlyEnforceIf(is_violation.Not())
             penalties.append(is_violation * W_CONSECUTIVE)
 
-    # S1. 每日基线 (>=)
+    # S1. 每日基线
     for d in range(num_days):
         for s_name, min_val in min_staff_per_shift.items():
             if min_val == 0: continue
@@ -282,7 +267,7 @@ def solve_schedule_v14():
             model.Add(shortage >= 0)
             penalties.append(shortage * W_BASELINE)
 
-    # S2. 休息模式 (=)
+    # S2. 休息模式
     for e in range(len(employees)):
         actual_rest = sum(shift_vars[(e, d, off_idx)] for d in range(num_days))
         diff_rest = model.NewIntVar(0, num_days, f'diff_r_{e}')
@@ -290,7 +275,7 @@ def solve_schedule_v14():
         model.Add(diff_rest >= target_off_days - actual_rest)
         penalties.append(diff_rest * W_REST_STRICT)
 
-    # S3. 活动需求 (>=)
+    # S3. 活动需求
     for idx, row in edited_activity.iterrows():
         if not row["日期"] or not row["指定班次"]: continue
         try:
@@ -310,7 +295,7 @@ def solve_schedule_v14():
                 model.Add(shift_vars[(e, d, n_idx)] + shift_vars[(e, d+1, d_idx)] <= 1 + vio)
                 penalties.append(vio * W_FATIGUE)
     
-    # S5. 个人拒绝与减少
+    # S5. 个人拒绝
     for idx, row in edited_df.iterrows():
         ref = row["拒绝班次(强)"]
         if ref and ref in shift_work:
@@ -323,57 +308,55 @@ def solve_schedule_v14():
         if red and red in shift_work:
             rd_idx = s_map[red]
             cnt = sum(shift_vars[(idx, d, rd_idx)] for d in range(num_days))
-            penalties.append(cnt * W_REDUCE)
-        
+            penalties.append(cnt * 100) # 权重较低
+
         req_off = str(row["指定休息日"])
         if req_off.strip():
             try:
                 days = [int(x)-1 for x in req_off.replace("，",",").split(",") if x.strip().isdigit()]
                 for d in days:
                     if 0 <= d < num_days:
-                        # 没休则罚
                         is_work = model.NewBoolVar(f'vio_off_{idx}_{d}')
                         model.Add(shift_vars[(idx, d, off_idx)] == 0).OnlyEnforceIf(is_work)
                         model.Add(shift_vars[(idx, d, off_idx)] == 1).OnlyEnforceIf(is_work.Not())
                         penalties.append(is_work * 50000)
             except: pass
 
-    # --- S6. 关键：公平性 (The Fairness Fix) ---
-    # 我们不仅要限制 max-min，还要惩罚每一个偏离平均值的行为
-    # 逻辑：对于每个工作班次，计算 max_count 和 min_count
+    # --- S6. 关键：强力平衡 (V15 FIX) ---
     for s_name in shift_work:
         if min_staff_per_shift.get(s_name, 0) == 0: continue
         s_idx = s_map[s_name]
         
-        # 1. 每日人数波动 (Daily Stability)
+        # 1. 每日人数波动 (权重 500万)
         d_counts = [sum(shift_vars[(e, d, s_idx)] for e in range(len(employees))) for d in range(num_days)]
         max_d = model.NewIntVar(0, len(employees), '')
         min_d = model.NewIntVar(0, len(employees), '')
         model.AddMaxEquality(max_d, d_counts)
         model.AddMinEquality(min_d, d_counts)
+        
+        # 强制约束：如果差值超过阈值，罚分极其惨重
         excess_d = model.NewIntVar(0, len(employees), '')
         model.Add(excess_d >= (max_d - min_d) - diff_daily_threshold)
-        penalties.append(excess_d * W_BALANCE)
+        penalties.append(excess_d * W_DAILY_BALANCE)
 
-        # 2. 员工工时公平性 (Period Fairness)
+        # 2. 员工工时差异 (权重 10万)
         e_counts = [sum(shift_vars[(e, d, s_idx)] for d in range(num_days)) for e in range(len(employees))]
         max_e = model.NewIntVar(0, num_days, '')
         min_e = model.NewIntVar(0, num_days, '')
         model.AddMaxEquality(max_e, e_counts)
         model.AddMinEquality(min_e, e_counts)
         excess_e = model.NewIntVar(0, num_days, '')
-        # 如果 max - min > 阈值，重罚
         model.Add(excess_e >= (max_e - min_e) - diff_period_threshold)
-        penalties.append(excess_e * W_BALANCE * 5) # 5倍权重，强迫 AI 把班次抹平
+        penalties.append(excess_e * W_PERIOD_BALANCE)
 
     # 求解
     model.Minimize(sum(penalties))
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 20.0
+    solver.parameters.max_time_in_seconds = 25.0
     status = solver.Solve(model)
 
     if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-        # --- 审计逻辑 ---
+        # --- 6. 严苛审计逻辑 (Python Side Audit) ---
         audit_logs = []
         
         res_matrix = []
@@ -386,26 +369,37 @@ def solve_schedule_v14():
                         break
             res_matrix.append(row)
             
-        # 审计1: 0排班
-        for d in range(num_days):
-            for s_name, min_val in min_staff_per_shift.items():
-                if min_val == 0:
-                    cnt = sum(1 for e in range(len(employees)) if res_matrix[e][d] == s_name)
-                    if cnt > 0: audit_logs.append(f"<span class='log-err'>❌ [严重] {s_name} 被禁用了，但第{d+1}天排了 {cnt} 人</span>")
-
-        # 审计2: 公平性
+        # 审计1: 每日人数波动 (检查用户提到的差2人问题)
+        audit_logs.append("<div class='log-section'>--- 每日波动检测 (Daily Balance) ---</div>")
         for s_name in shift_work:
-             counts = []
-             for e in range(len(employees)):
-                 c = sum(1 for d in range(num_days) if res_matrix[e][d] == s_name)
-                 counts.append(c)
-             diff = max(counts) - min(counts)
-             if diff > diff_period_threshold:
-                 audit_logs.append(f"<span class='log-err'>❌ [平衡性] {s_name} 差异过大: {diff} (阈值 {diff_period_threshold})</span>")
-             else:
-                 audit_logs.append(f"<span class='log-warn'>✅ [平衡性] {s_name} 差异: {diff} (达标)</span>")
+            if min_staff_per_shift.get(s_name, 0) == 0: continue
+            
+            counts = []
+            for d in range(num_days):
+                c = sum(1 for e in range(len(employees)) if res_matrix[e][d] == s_name)
+                counts.append(c)
+            
+            diff = max(counts) - min(counts)
+            if diff > diff_daily_threshold:
+                audit_logs.append(f"<span class='log-err'>❌ [平衡失败] {s_name}: 最大 {max(counts)}人 vs 最小 {min(counts)}人 (差 {diff} > 阈值 {diff_daily_threshold})</span>")
+            else:
+                audit_logs.append(f"<span class='log-pass'>✅ [平衡达标] {s_name}: 波动 {diff} (阈值 {diff_daily_threshold})</span>")
+
+        # 审计2: 员工工时差异 (检查早班堆积问题)
+        audit_logs.append("<div class='log-section'>--- 员工工时检测 (Staff Fairness) ---</div>")
+        for s_name in shift_work:
+            e_counts = []
+            for e in range(len(employees)):
+                c = sum(1 for d in range(num_days) if res_matrix[e][d] == s_name)
+                e_counts.append(c)
+            diff = max(e_counts) - min(e_counts)
+            if diff > diff_period_threshold:
+                audit_logs.append(f"<span class='log-err'>❌ [严重不均] {s_name}: 某人上 {max(e_counts)}次 vs 某人上 {min(e_counts)}次 (差 {diff})</span>")
+            else:
+                audit_logs.append(f"<span class='log-pass'>✅ [分配均匀] {s_name}: 差异 {diff}</span>")
 
         # 审计3: 最大连班
+        audit_logs.append("<div class='log-section'>--- 疲劳度检测 (Fatigue) ---</div>")
         for e_idx, e_name in enumerate(employees):
             consecutive = 0
             max_c = 0
@@ -414,12 +408,21 @@ def solve_schedule_v14():
                 else: consecutive = 0
                 max_c = max(max_c, consecutive)
             if max_c > max_consecutive:
-                audit_logs.append(f"<span class='log-err'>❌ [健康] {e_name} 连班 {max_c} 天 (超限 {max_consecutive})</span>")
+                audit_logs.append(f"<span class='log-err'>❌ [严重] {e_name} 连班 {max_c} 天 (限 {max_consecutive})</span>")
+
+        # 审计4: 0排班检测
+        for d in range(num_days):
+            for s_name, min_val in min_staff_per_shift.items():
+                if min_val == 0:
+                    cnt = sum(1 for e in range(len(employees)) if res_matrix[e][d] == s_name)
+                    if cnt > 0: audit_logs.append(f"<span class='log-err'>❌ [严重] {s_name} 被禁用，但第{d+1}天排了 {cnt} 人</span>")
 
         if not any("❌" in l for l in audit_logs):
-            audit_logs.insert(0, "<span class='log-ok'>✅ 自检通过：所有硬性规则与平衡性指标均已满足。</span>")
+            audit_logs.insert(0, "<span class='log-pass'>🎉 完美排班：所有硬性规则、平衡性阈值均通过自检！</span>")
+        else:
+            audit_logs.insert(0, "<span class='log-err'>⚠️ 警告：检测到部分规则未完全满足（见下文红色项），请检查是否人力过紧。</span>")
 
-        # 构建 DataFrame
+        # 数据构建
         data_rows = []
         for e in range(len(employees)):
             row = [employees[e]]
@@ -433,7 +436,7 @@ def solve_schedule_v14():
             data_rows.append(row)
             
         footer_rows = []
-        for s in shifts: 
+        for s in shifts:
             r_s = [f"【{s}】"]
             for d in range(num_days):
                 cnt = sum(1 for e in range(len(employees)) if res_matrix[e][d] == s)
@@ -441,15 +444,16 @@ def solve_schedule_v14():
             r_s.extend([""] * (len(shift_work)+1))
             footer_rows.append(r_s)
 
+        date_tuples = get_date_tuple(start_date, end_date)
         cols = [("基本信息", "姓名")] + date_tuples + [("工时统计", s) for s in shift_work] + [("工时统计", "休息天数")]
         return pd.DataFrame(data_rows + footer_rows, columns=pd.MultiIndex.from_tuples(cols)), audit_logs
     
-    return None, ["❌ 求解失败：可能是每日基线要求过高。"]
+    return None, ["❌ 求解失败：可能是每日基线要求过高，超过了总人数限制。"]
 
 # --- 6. 执行 ---
 if generate_btn:
-    with st.spinner("🚀 AI 正在进行深度平衡运算..."):
-        df, logs = solve_schedule_v14()
+    with st.spinner("🚀 AI 正在进行深度平衡运算与自检..."):
+        df, logs = solve_schedule_v15()
         st.session_state.result_df = df
         st.session_state.audit_report = logs
 
@@ -457,7 +461,8 @@ if st.session_state.result_df is not None:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">📋 审计报告 & 排班结果</div>', unsafe_allow_html=True)
     
-    log_html = "<div class='audit-box'>" + "<br>".join(st.session_state.audit_report) + "</div>"
+    # 审计日志
+    log_html = "<div class='audit-container'>" + "<br>".join(st.session_state.audit_report) + "</div>"
     st.markdown(log_html, unsafe_allow_html=True)
     st.markdown("###")
     
@@ -465,16 +470,16 @@ if st.session_state.result_df is not None:
         s = str(val)
         if off_shift_name in s: return 'background-color: #f8f9fa; color: #adb5bd'
         if "晚" in s: return 'background-color: #fff3cd; color: #856404'
-        if "【" in s: return 'font-weight: bold; background-color: #e3f2fd'
+        if "【" in s: return 'font-weight: bold; background-color: #ebf8ff; color: #2b6cb0'
         return ''
     
     st.dataframe(st.session_state.result_df.style.applymap(style_map), use_container_width=True, height=600)
     
+    # 导出
     output = io.BytesIO()
     df_exp = st.session_state.result_df.copy()
     df_exp.columns = [f"{c[0]}\n{c[1]}" if "信息" not in c[0] else c[1] for c in st.session_state.result_df.columns]
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_exp.to_excel(writer, index=False)
-    st.download_button("📥 导出排班表 (Excel)", output.getvalue(), "智能排班_V14.xlsx")
-    
+    st.download_button("📥 导出排班表 (Excel)", output.getvalue(), "智能排班_V15.xlsx")
     st.markdown('</div>', unsafe_allow_html=True)
