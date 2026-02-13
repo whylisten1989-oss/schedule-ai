@@ -483,7 +483,23 @@ def solve_schedule_v19():
                 audit_logs.append(f"<div class='log-item log-err'>❌ {e_name} 连班 {m_c} 天 (限 {max_consecutive})</div>")
                 cons_fail += 1
         if cons_fail == 0: audit_logs.append(f"<div class='log-item log-pass'>✅ 连班检测通过 (上限 {max_consecutive})</div>")
-
+        # 8. 新增：晚转早检测 (疲劳审计)
+        if enable_no_night_to_day: # 只有开启了这个功能才检测
+            audit_logs.append("<div class='log-header'>8. 🌙 晚转早检测 (Fatigue)</div>")
+            fatigue_fail = 0
+            for e_idx, e_name in enumerate(employees):
+                for d in range(num_days - 1):
+                    today_shift = res_matrix[e_idx][d]
+                    tomorrow_shift = res_matrix[e_idx][d+1]
+                    
+                    # 检查：今天晚班 AND 明天早班
+                    if today_shift == night_shift and tomorrow_shift == day_shift:
+                        audit_logs.append(f"<div class='log-item log-err'>❌ {e_name}: 第{d+1}天{night_shift} -> 第{d+2}天{day_shift} (严重疲劳)</div>")
+                        fatigue_fail += 1
+            
+            if fatigue_fail == 0:
+                audit_logs.append(f"<div class='log-item log-pass'>✅ 无晚转早违规</div>")
+        
         # 数据构建
         data_rows = []
         for e in range(len(employees)):
