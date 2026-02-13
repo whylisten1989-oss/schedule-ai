@@ -5,8 +5,8 @@ import io
 import datetime
 import math
 
-# --- 0. 页面配置与 UI 重构 (完全回归 V14 的高颜值风格) ---
-st.set_page_config(page_title="智能排班 V16.0 (终极修正版)", layout="wide", page_icon="💎")
+# --- 0. 页面配置 ---
+st.set_page_config(page_title="智能排班 V17.0 (稳如泰山版)", layout="wide", page_icon="💎")
 
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
@@ -15,77 +15,60 @@ if 'audit_report' not in st.session_state:
 
 st.markdown("""
     <style>
-    /* 1. 全局字体与背景 (回归清爽) */
+    /* 全局字体 */
     .stApp {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         background-color: #f7f9fc;
     }
     
-    /* 2. 卡片式布局 (V14 风格回归) */
+    /* 卡片布局 */
     .css-card {
-        background-color: white;
-        padding: 24px;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-        border: 1px solid #edf2f7;
+        background-color: white; padding: 24px; border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #edf2f7;
     }
     .card-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: #1a202c;
-        margin-bottom: 16px;
-        border-left: 4px solid #3182ce;
-        padding-left: 10px;
+        font-size: 16px; font-weight: 700; color: #1a202c; margin-bottom: 16px;
+        border-left: 4px solid #3182ce; padding-left: 10px;
     }
     
-    /* 3. 输入框美化 */
+    /* 输入框统一 */
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div, .stTextArea>div>div>textarea {
-        border-radius: 6px;
-        border: 1px solid #cbd5e0;
+        border-radius: 6px; border: 1px solid #cbd5e0;
     }
     
-    /* 4. 生成按钮 (全宽、悬浮感、大圆角) */
+    /* 生成按钮 */
     .stButton > button {
-        width: 100%;
-        background: linear-gradient(135deg, #3182ce 0%, #2b6cb0 100%) !important;
-        color: white !important;
-        font-size: 20px !important;
-        font-weight: 600 !important;
-        padding: 16px 0 !important;
-        border-radius: 10px !important;
-        border: none !important;
-        box-shadow: 0 4px 6px rgba(49, 130, 206, 0.3);
-        transition: all 0.2s;
+        width: 100%; background: linear-gradient(135deg, #3182ce 0%, #2b6cb0 100%) !important;
+        color: white !important; font-size: 20px !important; font-weight: 600 !important;
+        padding: 16px 0 !important; border-radius: 10px !important; border: none !important;
+        box-shadow: 0 4px 6px rgba(49, 130, 206, 0.3); transition: all 0.2s;
     }
     .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(49, 130, 206, 0.4);
+        transform: translateY(-2px); box-shadow: 0 6px 12px rgba(49, 130, 206, 0.4);
     }
     
-    /* 5. 审计日志区 (美化版) */
+    /* --- 核心修改：审计日志固定高度与滚动 --- */
     .audit-container {
         background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
+        border: 1px solid #e2e8f0; border-radius: 8px;
         padding: 15px;
-        max-height: 400px;
-        overflow-y: auto;
+        height: 300px; /* 固定高度 */
+        overflow-y: auto; /* 右侧滚动条 */
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
     }
     .log-item {
-        padding: 8px 12px;
-        margin-bottom: 6px;
-        border-radius: 6px;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
+        padding: 6px 10px; margin-bottom: 4px; border-radius: 4px; font-size: 13px;
+        display: flex; align-items: center; border-bottom: 1px solid #f7fafc;
     }
-    .log-err {background-color: #fff5f5; color: #c53030; border-left: 4px solid #c53030;}
-    .log-warn {background-color: #fffaf0; color: #c05621; border-left: 4px solid #c05621;}
-    .log-pass {background-color: #f0fff4; color: #2f855a; border-left: 4px solid #2f855a;}
-    .log-header {font-weight: bold; margin-top: 15px; margin-bottom: 5px; color: #4a5568; border-bottom: 1px dashed #cbd5e0;}
+    .log-err {background-color: #fff5f5; color: #c53030; font-weight: 600;}
+    .log-warn {background-color: #fffaf0; color: #c05621;}
+    .log-pass {background-color: #f0fff4; color: #2f855a;}
+    .log-header {
+        font-weight: 800; margin-top: 15px; margin-bottom: 8px; color: #2d3748; 
+        background-color: #edf2f7; padding: 5px 10px; border-radius: 4px;
+    }
 
-    /* 6. 表格居中 */
+    /* 表格居中 */
     div[data-testid="stDataFrame"] div[role="grid"] div[role="gridcell"],
     div[data-testid="stDataFrame"] div[role="grid"] div[role="columnheader"] {
         justify-content: center !important; text-align: center !important;
@@ -93,7 +76,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("💎 智能排班 V16.0 - 终极修正版")
+st.title("💎 智能排班 V17.0 - 稳如泰山版")
 
 # --- 工具函数 ---
 def get_date_tuple(start_date, end_date):
@@ -103,10 +86,9 @@ def get_date_tuple(start_date, end_date):
               week_map[(start_date + datetime.timedelta(days=i)).weekday()] ) 
             for i in range(delta.days + 1)]
 
-# --- 1. 侧边栏：基础档案 (保留美观样式) ---
+# --- 1. 侧边栏 ---
 with st.sidebar:
     st.markdown('<div class="css-card"><div class="card-title">📂 基础档案</div>', unsafe_allow_html=True)
-    
     default_employees = "张三\n李四\n王五\n赵六\n钱七\n孙八\n周九\n吴十\n郑十一\n王十二"
     emp_input = st.text_area("员工名单 (Excel直接粘贴)", default_employees, height=150)
     employees = [e.strip() for e in emp_input.replace('\n', ',').replace('，', ',').split(",") if e.strip()]
@@ -126,27 +108,22 @@ with st.sidebar:
         with c2: day_shift = st.selectbox("早班", shift_work, index=0)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 2. 顶部：逻辑透明化 (绝不阉割) ---
+# --- 2. 顶部逻辑 ---
 col_logic_1, col_logic_2 = st.columns(2)
-
 with col_logic_1:
-    with st.expander("⚖️ 平衡性与波动阈值 (V16修正)", expanded=True):
-        st.info("💡 如果排班结果差值超过设定，系统会在日志中报错。")
+    with st.expander("⚖️ 平衡性与波动阈值", expanded=True):
         p1, p2 = st.columns(2)
-        with p1: diff_daily_threshold = st.number_input("每日人数允许差值", 0, 5, 0, help="设为0表示必须完全平。")
-        with p2: diff_period_threshold = st.number_input("员工工时允许差值", 0, 5, 2, help="员工之间工作天数最大差距。")
-
+        with p1: diff_daily_threshold = st.number_input("每日人数允许差值", 0, 5, 0)
+        with p2: diff_period_threshold = st.number_input("员工工时允许差值", 0, 5, 2)
 with col_logic_2:
     with st.expander("📜 查看底层逻辑权重"):
         st.markdown("""
-        **后台逻辑优先级 (权重从高到低):**
-        1.  **🔥 活动需求** (硬约束) - *绝对优先*
-        2.  **🚫 0排班禁令** (硬约束) - *绝对不排*
-        3.  **⚖️ 每日人数波动** (权重: 5,000,000) - *强制拉平*
-        4.  **🔄 最大连班** (权重: 2,000,000) - *红线指标*
-        5.  **🧱 每日基线** (权重: 1,000,000) - *保运营*
-        6.  **🛌 休息模式** (权重: 500,000) - *保休息*
-        7.  **❌ 个人拒绝/指定休** (权重: 50,000) - *尽量满足*
+        1. 🔥 **活动需求** (硬约束)
+        2. 🚫 **0排班禁令** (硬约束)
+        3. ⚖️ **每日波动** (500w)
+        4. 🔄 **最大连班** (200w)
+        5. 🧱 **每日基线** (100w)
+        6. 🛌 **休息模式** (50w)
         """)
 
 # --- 3. 主控制区 ---
@@ -186,7 +163,6 @@ with col_data:
     m3, m4 = st.columns(2)
     m3.metric("日均运力", f"{daily_capacity:.1f} 人")
     m4.metric("建议单班基线", f"{suggested_min} 人", delta="推荐值")
-    
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 4. 详细配置区 ---
@@ -195,8 +171,6 @@ col_base, col_req = st.columns([1, 2.5])
 with col_base:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">🧱 每日班次基线</div>', unsafe_allow_html=True)
-    st.caption("注：设为 0 = 🚫 绝对禁止排班")
-    
     min_staff_per_shift = {}
     for s in shift_work:
         val = st.number_input(f"{s}", min_value=0, value=suggested_min, key=f"min_{s}_{suggested_min}")
@@ -204,7 +178,7 @@ with col_base:
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown("###")
-    generate_btn = st.button("🚀 立即执行智能排班 (自检版)")
+    generate_btn = st.button("🚀 立即执行智能排班")
 
 with col_req:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
@@ -241,21 +215,21 @@ with col_req:
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. 核心算法 V16 (修复审计漏报 Bug) ---
-def solve_schedule_v16():
+# --- 5. 核心算法 (保持 V16 权重) ---
+def solve_schedule_v17():
     model = cp_model.CpModel()
     shift_vars = {}
     s_map = {s: i for i, s in enumerate(shifts)}
     off_idx = s_map[off_shift_name]
     penalties = []
     
-    # === 权重体系 ===
+    # 权重体系
     W_ACTIVITY = 10000000
-    W_DAILY_BALANCE = 5000000 # 每日平衡
-    W_CONSECUTIVE = 2000000   # 连班
-    W_BASELINE = 1000000      # 基线
-    W_REST_STRICT = 500000    # 休息
-    W_PERIOD_BALANCE = 100000 # 工时平衡
+    W_DAILY_BALANCE = 5000000
+    W_CONSECUTIVE = 2000000
+    W_BASELINE = 1000000
+    W_REST_STRICT = 500000
+    W_PERIOD_BALANCE = 100000
     W_FATIGUE = 50000
     W_REFUSE = 20000
 
@@ -348,19 +322,18 @@ def solve_schedule_v16():
                 days = [int(x)-1 for x in req_off.replace("，",",").split(",") if x.strip().isdigit()]
                 for d in days:
                     if 0 <= d < num_days:
-                        # 没休则罚 5万 (与拒绝同级)
+                        # 没休则罚 5万
                         is_work = model.NewBoolVar(f'vio_off_{idx}_{d}')
                         model.Add(shift_vars[(idx, d, off_idx)] == 0).OnlyEnforceIf(is_work)
                         model.Add(shift_vars[(idx, d, off_idx)] == 1).OnlyEnforceIf(is_work.Not())
                         penalties.append(is_work * 50000)
             except: pass
 
-    # S6. 强力平衡 (Max - Min <= Threshold)
+    # S6. 强力平衡
     for s_name in shift_work:
         if min_staff_per_shift.get(s_name, 0) == 0: continue
         s_idx = s_map[s_name]
         
-        # 每日波动
         d_counts = [sum(shift_vars[(e, d, s_idx)] for e in range(len(employees))) for d in range(num_days)]
         max_d, min_d = model.NewIntVar(0, len(employees), ''), model.NewIntVar(0, len(employees), '')
         model.AddMaxEquality(max_d, d_counts)
@@ -369,7 +342,6 @@ def solve_schedule_v16():
         model.Add(excess_d >= (max_d - min_d) - diff_daily_threshold)
         penalties.append(excess_d * W_DAILY_BALANCE)
 
-        # 员工差异
         e_counts = [sum(shift_vars[(e, d, s_idx)] for d in range(num_days)) for e in range(len(employees))]
         max_e, min_e = model.NewIntVar(0, num_days, ''), model.NewIntVar(0, num_days, '')
         model.AddMaxEquality(max_e, e_counts)
@@ -378,18 +350,18 @@ def solve_schedule_v16():
         model.Add(excess_e >= (max_e - min_e) - diff_period_threshold)
         penalties.append(excess_e * W_PERIOD_BALANCE)
 
-    # 求解
     model.Minimize(sum(penalties))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 25.0
     status = solver.Solve(model)
 
     if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-        # --- 6. 严苛审计逻辑 (Python Side Audit - FIX BUG) ---
+        # --- 6. 全维度审计逻辑 (修复指定日漏报 Bug) ---
         audit_logs = []
         
-        # 构建结果矩阵
         res_matrix = [] # [employee][day] -> shift_name
+        name_map = {name: i for i, name in enumerate(employees)} # 姓名到索引的映射，防止排序bug
+
         for e in range(len(employees)):
             row = []
             for d in range(num_days):
@@ -398,51 +370,80 @@ def solve_schedule_v16():
                         row.append(shifts[s])
                         break
             res_matrix.append(row)
-            
-        # 审计1: 指定休息日 (修复漏报问题)
-        audit_logs.append("<div class='log-header'>1. 指定休息日检测 (Specific Rest)</div>")
-        off_fail_count = 0
+        
+        # 审计1: 活动需求
+        audit_logs.append("<div class='log-header'>1. 🔥 活动需求检测</div>")
+        act_fail = 0
+        for idx, row in edited_activity.iterrows():
+            if not row["日期"] or not row["指定班次"]: continue
+            try:
+                d_idx = date_headers_simple.index(row["日期"])
+                s_name = row["指定班次"]
+                req = int(row["所需人数"])
+                actual = sum(1 for e in range(len(employees)) if res_matrix[e][d_idx] == s_name)
+                if actual < req:
+                    audit_logs.append(f"<div class='log-item log-err'>❌ {row['日期']} {s_name}: 实到{actual} / 需{req} (严重不足)</div>")
+                    act_fail += 1
+            except: pass
+        if act_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 所有活动需求已满足</div>")
+
+        # 审计2: 每日基线
+        audit_logs.append("<div class='log-header'>2. 🧱 每日基线检测</div>")
+        base_fail = 0
+        for d in range(num_days):
+            for s_name, min_val in min_staff_per_shift.items():
+                if min_val == 0: continue
+                cnt = sum(1 for e in range(len(employees)) if res_matrix[e][d] == s_name)
+                if cnt < min_val:
+                    audit_logs.append(f"<div class='log-item log-err'>❌ 第{d+1}天 {s_name}: 实到{cnt} / 需{min_val}</div>")
+                    base_fail += 1
+        if base_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 每日基线全部达标</div>")
+
+        # 审计3: 休息模式
+        audit_logs.append("<div class='log-header'>3. 🛌 休息模式检测</div>")
+        rest_fail = 0
+        for e_idx, e_name in enumerate(employees):
+            cnt = sum(1 for d in range(num_days) if res_matrix[e_idx][d] == off_shift_name)
+            if cnt != target_off_days:
+                audit_logs.append(f"<div class='log-item log-err'>❌ {e_name}: 休了 {cnt} 天 (目标 {target_off_days})</div>")
+                rest_fail += 1
+        if rest_fail == 0: audit_logs.append(f"<div class='log-item log-pass'>✅ 全员休息天数达标 ({target_off_days}天)</div>")
+
+        # 审计4: 指定休息日 (关键修复)
+        audit_logs.append("<div class='log-header'>4. 🧘 指定休息日检测</div>")
+        spec_rest_fail = 0
         for idx, row in edited_df.iterrows():
+            name = row["姓名"]
+            # 关键：通过名字找索引，防止表格排序导致的错位
+            real_idx = name_map.get(name) 
+            if real_idx is None: continue 
+            
             req_off = str(row["指定休息日"])
             if req_off.strip():
                 try:
                     days = [int(x)-1 for x in req_off.replace("，",",").split(",") if x.strip().isdigit()]
                     for d in days:
                         if 0 <= d < num_days:
-                            actual_shift = res_matrix[idx][d]
-                            if actual_shift != off_shift_name:
-                                # 之前这里漏报了，现在修复
-                                audit_logs.append(f"<div class='log-item log-err'>❌ {employees[idx]} 指定第{d+1}天休，但排了: {actual_shift} (资源冲突)</div>")
-                                off_fail_count += 1
+                            actual = res_matrix[real_idx][d]
+                            if actual != off_shift_name:
+                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}</div>")
+                                spec_rest_fail += 1
                 except: pass
-        if off_fail_count == 0: audit_logs.append("<div class='log-item log-pass'>✅ 所有指定休息请求均已满足</div>")
+        if spec_rest_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 指定休息日全部满足</div>")
 
-        # 审计2: 每日人数波动
-        audit_logs.append("<div class='log-header'>2. 每日人数波动 (Daily Balance)</div>")
-        for s_name in shift_work:
-            if min_staff_per_shift.get(s_name, 0) == 0: continue
-            counts = []
+        # 审计5: 最大连班
+        audit_logs.append("<div class='log-header'>5. 🔄 最大连班检测</div>")
+        cons_fail = 0
+        for e_idx, e_name in enumerate(employees):
+            curr = 0; m_c = 0
             for d in range(num_days):
-                c = sum(1 for e in range(len(employees)) if res_matrix[e][d] == s_name)
-                counts.append(c)
-            diff = max(counts) - min(counts)
-            if diff > diff_daily_threshold:
-                audit_logs.append(f"<div class='log-item log-err'>❌ {s_name}: 波动 {diff} (最大{max(counts)}/最小{min(counts)}) > 阈值 {diff_daily_threshold}</div>")
-            else:
-                audit_logs.append(f"<div class='log-item log-pass'>✅ {s_name}: 波动 {diff} (达标)</div>")
-
-        # 审计3: 员工工时差异
-        audit_logs.append("<div class='log-header'>3. 员工工时公平 (Worker Fairness)</div>")
-        for s_name in shift_work:
-            e_counts = []
-            for e in range(len(employees)):
-                c = sum(1 for d in range(num_days) if res_matrix[e][d] == s_name)
-                e_counts.append(c)
-            diff = max(e_counts) - min(e_counts)
-            if diff > diff_period_threshold:
-                audit_logs.append(f"<div class='log-item log-err'>❌ {s_name}: 差异 {diff} (最忙{max(e_counts)}/最闲{min(e_counts)}) > 阈值 {diff_period_threshold}</div>")
-            else:
-                audit_logs.append(f"<div class='log-item log-pass'>✅ {s_name}: 差异 {diff} (达标)</div>")
+                if res_matrix[e_idx][d] != off_shift_name: curr+=1
+                else: curr=0
+                m_c = max(m_c, curr)
+            if m_c > max_consecutive:
+                audit_logs.append(f"<div class='log-item log-err'>❌ {e_name} 连班 {m_c} 天 (限 {max_consecutive})</div>")
+                cons_fail += 1
+        if cons_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 连班限制合规</div>")
 
         # 数据构建
         data_rows = []
@@ -470,12 +471,12 @@ def solve_schedule_v16():
         cols = [("基本信息", "姓名")] + date_tuples + [("工时统计", s) for s in shift_work] + [("工时统计", "休息天数")]
         return pd.DataFrame(data_rows + footer_rows, columns=pd.MultiIndex.from_tuples(cols)), audit_logs
     
-    return None, ["❌ 求解失败：硬性冲突无法解决 (如每日基线 > 总人数)。"]
+    return None, ["❌ 求解失败。"]
 
-# --- 6. 执行与显示 ---
+# --- 6. 执行 ---
 if generate_btn:
     with st.spinner("🚀 AI 正在运算 (V16 Core)..."):
-        df, logs = solve_schedule_v16()
+        df, logs = solve_schedule_v17()
         st.session_state.result_df = df
         st.session_state.audit_report = logs
 
@@ -483,7 +484,7 @@ if st.session_state.result_df is not None:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">📋 审计日志 & 排班结果</div>', unsafe_allow_html=True)
     
-    # 审计日志
+    # 审计日志区 (固定高度)
     log_html = "<div class='audit-container'>" + "".join(st.session_state.audit_report) + "</div>"
     st.markdown(log_html, unsafe_allow_html=True)
     st.markdown("###")
@@ -503,5 +504,4 @@ if st.session_state.result_df is not None:
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_exp.to_excel(writer, index=False)
     st.download_button("📥 导出 Excel", output.getvalue(), "智能排班_V16.xlsx")
-    
     st.markdown('</div>', unsafe_allow_html=True)
