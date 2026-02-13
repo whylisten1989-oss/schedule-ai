@@ -267,16 +267,13 @@ def solve_schedule_v19():
             model.Add(sum(window) <= max_consecutive).OnlyEnforceIf(is_violation.Not())
             penalties.append(is_violation * W_CONSECUTIVE)
 
-    # S1. 每日基线
+   # S1. 每日基线 (已修改为硬约束)
+    # 逻辑：实际人数 必须 >= 最少人数。少一个都不行，直接无解报错。
     for d in range(num_days):
         for s_name, min_val in min_staff_per_shift.items():
-            if min_val == 0: continue
-            s_idx = s_map[s_name]
-            actual = sum(shift_vars[(e, d, s_idx)] for e in range(len(employees)))
-            shortage = model.NewIntVar(0, len(employees), f'short_{d}_{s_name}')
-            model.Add(shortage >= min_val - actual)
-            model.Add(shortage >= 0)
-            penalties.append(shortage * W_BASELINE)
+            if min_val > 0: # 只有大于0才检查，等于0已经在H2处理了
+                s_idx = s_map[s_name]
+                model.Add(sum(shift_vars[(e, d, s_idx)] for e in range(len(employees))) >= min_val)
 
     # S2. 休息模式
     for e in range(len(employees)):
@@ -423,10 +420,10 @@ def solve_schedule_v19():
         if rest_fail == 0: audit_logs.append(f"<div class='log-item log-pass'>✅ 全员休息天数达标 ({target_off_days}天)</div>")
 
         # 4. 指定休息日
-        audit_logs.append("<div class='log-header'>4. 🧘 指定休息日检测</div>")
         spec_rest_fail = 0
         for idx, row in edited_df.iterrows():
             name = row["姓名"]
+            # 【关键修改】通过名字找真实的索引，而不是用 idx
             real_idx = name_map.get(name) 
             if real_idx is None: continue 
             
@@ -436,9 +433,10 @@ def solve_schedule_v19():
                     days = [int(x)-1 for x in req_off.replace("，",",").split(",") if x.strip().isdigit()]
                     for d in days:
                         if 0 <= d < num_days:
+                            # 使用 real_idx 去查表
                             actual = res_matrix[real_idx][d]
                             if actual != off_shift_name:
-                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}，为满足硬性条件规则 随机安排</div>")
+                                audit_logs.append(f"<div class='log-item log-err'>❌ {name} 指定第{d+1}天休，但排了: {actual}</div>")
                                 spec_rest_fail += 1
                 except: pass
         if spec_rest_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 指定休息日全部满足</div>")
@@ -530,6 +528,10 @@ def solve_schedule_v19():
     return None, ["❌ 求解失败：硬性冲突无法解决。"]
 
 # --- 6. 执行 ---
+if generate_btn:
+    # 【新增】强制清空旧状态，防止逻辑残留
+    st.session_state.result_df = None
+    st.session_state.audit_report = []
 if generate_btn:
     with st.spinner("🚀 AI 正在运算 (V19 Core)..."):
         df, logs = solve_schedule_v19()
