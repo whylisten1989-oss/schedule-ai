@@ -4,200 +4,194 @@ from ortools.sat.python import cp_model
 import io
 
 # --- 页面配置 ---
-st.set_page_config(page_title="智能排班系统 V2.0", layout="wide", page_icon="📅")
-
-st.title("📅 智能排班系统 V2.0 - 逻辑增强版")
-st.info("当前版本重点：加入了班次均衡算法（公平性）和 防疲劳逻辑（晚转早）。")
+st.set_page_config(page_title="智能排班 V3.0 (表格版)", layout="wide", page_icon="📅")
+st.title("📅 智能排班系统 V3.0 - 批量管理版")
 
 # --- 1. 基础数据配置 ---
 with st.sidebar:
     st.header("1. 基础设置")
     
     # 员工名单录入
-    default_employees = "张三,李四,王五,赵六,钱七,孙八,周九,吴十"
+    default_employees = "张三,李四,王五,赵六,钱七,孙八,周九,吴十,郑十一,王十二"
     emp_input = st.text_area("输入员工名单 (用逗号分隔)", default_employees, height=100)
     employees = [e.strip() for e in emp_input.split(",") if e.strip()]
     
-    st.write(f"当前员工数: **{len(employees)}** 人")
-
     # 班次设置
     st.subheader("班次定义")
-    shifts_input = st.text_input("班次名称 (用英文逗号分隔)", "早班, 中班, 晚班, 休")
+    shifts_input = st.text_input("班次名称 (用逗号分隔)", "早班, 中班, 晚班, 休")
     shifts = [s.strip() for s in shifts_input.split(",")]
     
-    # 自动识别“休”字，用于逻辑判断
-    off_shift_name = next((s for s in shifts if "休" in s), None)
-    if not off_shift_name:
-        st.warning("⚠️ 请确保班次中包含'休'字，否则无法正确计算休息日！")
-        off_shift_indices = []
-    else:
-        off_shift_indices = [i for i, s in enumerate(shifts) if s == off_shift_name]
+    # 自动识别“休”
+    try:
+        off_shift_name = next(s for s in shifts if "休" in s)
+        st.success(f"已识别休息班次为: **{off_shift_name}**")
+    except StopIteration:
+        st.error("❌ 班次中必须包含'休'字！")
+        st.stop()
 
     # 时间范围
     num_days = st.slider("排班周期 (天)", 7, 31, 7)
 
-# --- 2. 高级约束配置 (逻辑核心) ---
-st.header("⚙️ 排班规则配置")
-col1, col2 = st.columns(2)
+# --- 2. 约束规则 (表格化) ---
+st.header("⚙️ 规则与需求管理")
+
+col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.subheader("🛡️ 硬约束 (必须满足)")
-    # 每日每班次人数需求
-    st.caption("每个班次最少需要几人？")
+    st.subheader("全局硬性规则")
+    # 休息天数限制
+    target_off_days = st.number_input("每人每周期必须休息几天？", min_value=0, max_value=num_days, value=2)
+    
+    st.markdown("---")
+    # 每日最少人数
+    st.caption("各班次最少在岗人数")
     min_staff_per_shift = {}
     for s in shifts:
-        if "休" not in s:
+        if s != off_shift_name:
             min_staff_per_shift[s] = st.number_input(f"【{s}】最少人数", min_value=0, value=1, key=f"min_{s}")
-
-    # 晚转早限制
+    
+    # 晚转早
     st.markdown("---")
-    enable_no_night_to_day = st.checkbox("🚫 禁止'晚转早' (防疲劳)", value=True, help="如果昨天是晚班，今天不能是早班")
+    enable_no_night_to_day = st.checkbox("🚫 禁止'晚转早'", value=True)
     if enable_no_night_to_day:
-        night_shift = st.selectbox("请指定哪个是'晚班'?", [s for s in shifts if "休" not in s], index=len(shifts)-2 if len(shifts)>2 else 0)
-        day_shift = st.selectbox("请指定哪个是'早班'?", [s for s in shifts if "休" not in s], index=0)
+        night_shift = st.selectbox("晚班是?", [s for s in shifts if s != off_shift_name], index=len(shifts)-2)
+        day_shift = st.selectbox("早班是?", [s for s in shifts if s != off_shift_name], index=0)
 
 with col2:
-    st.subheader("⚖️ 软约束 (尽量平衡)")
-    st.caption("AI 会尽力让大家的班次数量差异不超过这个值")
+    st.subheader("🙋‍♂️ 员工个性化需求 (直接编辑表格)")
+    st.caption("在下方表格填入员工的具体要求。数字代表第几天（如 '1,7' 代表第1天和第7天必休）。")
     
-    # 班次平衡阈值
-    balance_threshold = st.slider("允许的班次数量最大差异 (天)", 1, 5, 2, help="例如设为2：员工A上了5个早班，员工B最少也要上3个早班。")
+    # 创建初始数据框
+    init_data = {
+        "姓名": employees,
+        "指定休息日 (如: 1,3)": ["" for _ in employees],
+        "拒绝班次 (如: 晚班)": ["" for _ in employees]
+    }
+    df_requests = pd.DataFrame(init_data)
     
-    # 个人特殊需求 (简化版)
-    st.markdown("---")
-    st.caption("特殊人员照顾 (示例功能)")
-    special_emp = st.selectbox("选择员工", ["无"] + employees)
-    if special_emp != "无":
-        avoid_shift = st.selectbox(f"尽量让 {special_emp} 少上哪个班?", [s for s in shifts if "休" not in s])
-        st.info(f"系统将尝试减少 {special_emp} 的 {avoid_shift} 次数")
-
+    # 这是一个可编辑的表格！
+    edited_df = st.data_editor(
+        df_requests, 
+        num_rows="dynamic",
+        column_config={
+            "指定休息日 (如: 1,3)": st.column_config.TextColumn(help="输入数字，逗号分隔。例如：1,7 代表周一和周日休息"),
+            "拒绝班次 (如: 晚班)": st.column_config.SelectboxColumn(options=[s for s in shifts if s != off_shift_name], help="该员工绝对不上的班次")
+        },
+        hide_index=True
+    )
 
 # --- 核心算法 ---
-def solve_schedule_v2():
+def solve_schedule_v3():
     model = cp_model.CpModel()
-    
-    # 1. 变量定义: shifts[(e, d, s)] = 1 (员工e在第d天是班次s)
     shift_vars = {}
+    
+    # 索引映射
+    s_map = {s: i for i, s in enumerate(shifts)}
+    off_idx = s_map[off_shift_name]
+
+    # 1. 创建变量
     for e in range(len(employees)):
         for d in range(num_days):
             for s in range(len(shifts)):
                 shift_vars[(e, d, s)] = model.NewBoolVar(f'shift_{e}_{d}_{s}')
 
-    # 2. 硬约束：每天每人只能上 1 个班
+    # 2. 基础硬约束：每天每人只能 1 个班
     for e in range(len(employees)):
         for d in range(num_days):
             model.Add(sum(shift_vars[(e, d, s)] for s in range(len(shifts))) == 1)
 
-    # 3. 硬约束：满足每日每班次最少人数
+    # 3. 基础硬约束：最少人数 (排除休息班次)
     for d in range(num_days):
-        for s_idx, s_name in enumerate(shifts):
-            if s_name in min_staff_per_shift:
-                required = min_staff_per_shift[s_name]
-                model.Add(sum(shift_vars[(e, d, s_idx)] for e in range(len(employees))) >= required)
+        for s_name, min_val in min_staff_per_shift.items():
+            s_idx = s_map[s_name]
+            model.Add(sum(shift_vars[(e, d, s_idx)] for e in range(len(employees))) >= min_val)
 
-    # 4. 硬约束：禁止晚转早
+    # 4. 重点升级：每人休息天数必须达标
+    # 强制每个人在 num_days 里的“休”班次总数 == target_off_days
+    for e in range(len(employees)):
+        model.Add(sum(shift_vars[(e, d, off_idx)] for d in range(num_days)) == target_off_days)
+
+    # 5. 重点升级：处理表格里的个性化需求
+    # 遍历用户在网页表格里填的数据
+    for index, row in edited_df.iterrows():
+        name = row["姓名"]
+        if name not in employees: continue # 防止名字改错了
+        e_idx = employees.index(name)
+        
+        # 处理指定休息日
+        req_days_str = str(row["指定休息日 (如: 1,3)"])
+        if req_days_str and req_days_str.strip():
+            # 将 "1, 3, 5" 变成 [0, 2, 4] (注意程序里是 0 开始)
+            try:
+                days_list = [int(x.strip()) - 1 for x in req_days_str.replace("，", ",").split(",") if x.strip().isdigit()]
+                for d_idx in days_list:
+                    if 0 <= d_idx < num_days:
+                        # 强制这一天必须是“休”
+                        model.Add(shift_vars[(e_idx, d_idx, off_idx)] == 1)
+            except:
+                st.warning(f"员工 {name} 的休息日格式输入有误，已跳过。")
+
+        # 处理拒绝班次
+        reject_shift = row["拒绝班次 (如: 晚班)"]
+        if reject_shift and reject_shift in shifts:
+            reject_idx = s_map[reject_shift]
+            for d in range(num_days):
+                # 强制这一天绝对不能是这个班
+                model.Add(shift_vars[(e_idx, d, reject_idx)] == 0)
+
+    # 6. 晚转早限制
     if enable_no_night_to_day:
-        night_idx = shifts.index(night_shift)
-        day_idx = shifts.index(day_shift)
+        n_idx = s_map[night_shift]
+        d_idx = s_map[day_shift]
         for e in range(len(employees)):
             for d in range(num_days - 1):
-                # 逻辑：(昨天晚班 + 今天早班) <= 1  --> 两者不能同时为真
-                model.Add(shift_vars[(e, d, night_idx)] + shift_vars[(e, d+1, day_idx)] <= 1)
-
-    # 5. 软约束：班次均衡 (让每个人的每个班次数量尽量平均)
-    # 这是一个优化目标，我们引入惩罚变量
-    
-    # 计算每个人各班次的总数
-    for s_idx, s_name in enumerate(shifts):
-        if "休" in s_name: continue # 不强制平衡休息天数，优先平衡工时
-        
-        counts = []
-        for e in range(len(employees)):
-            c = model.NewIntVar(0, num_days, f'count_{employees[e]}_{s_name}')
-            model.Add(c == sum(shift_vars[(e, d, s_idx)] for d in range(num_days)))
-            counts.append(c)
-        
-        # 核心逻辑：最大值 - 最小值 <= 阈值
-        min_count = model.NewIntVar(0, num_days, f'min_{s_name}')
-        max_count = model.NewIntVar(0, num_days, f'max_{s_name}')
-        model.AddMinEquality(min_count, counts)
-        model.AddMaxEquality(max_count, counts)
-        
-        # 尽量满足 (max - min <= threshold)
-        # 如果无法满足，每超过 1 单位，惩罚权重增加
-        # 这里为了简化，我们先尝试将其设为硬约束，如果不通再转软约束
-        # 但为了用户体验，我们用 Soft Constraint 方式：
-        
-        diff = model.NewIntVar(0, num_days, f'diff_{s_name}')
-        model.Add(diff == max_count - min_count)
-        
-        # 告诉求解器：尽量让 diff 小于等于 阈值
-        # 这是一个技巧：我们惩罚 diff 超过 threshold 的部分
-        excess = model.NewIntVar(0, num_days, f'excess_{s_name}')
-        # excess >= diff - threshold
-        model.Add(excess >= diff - balance_threshold)
-        model.Minimize(excess * 10) # 权重设为10
-
-    # 6. 软约束：特殊人员偏好
-    if special_emp != "无":
-        try:
-            e_idx = employees.index(special_emp)
-            s_idx = shifts.index(avoid_shift)
-            # 尽量让这个 count 趋近于 0
-            count_special = sum(shift_vars[(e_idx, d, s_idx)] for d in range(num_days))
-            model.Minimize(count_special * 5) # 权重设为5
-        except:
-            pass
+                model.Add(shift_vars[(e, d, n_idx)] + shift_vars[(e, d+1, d_idx)] <= 1)
 
     # 求解
     solver = cp_model.CpSolver()
-    # 设置求解时间限制 (防止死循环)
-    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.max_time_in_seconds = 15.0
     status = solver.Solve(model)
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         data = []
         for e in range(len(employees)):
-            row = {"姓名": employees[e]}
-            # 统计各班次数量，用于核对
-            shift_counts = {s:0 for s in shifts}
-            
+            row_data = {"姓名": employees[e]}
             for d in range(num_days):
                 for s in range(len(shifts)):
                     if solver.Value(shift_vars[(e, d, s)]):
-                        row[f"D{d+1}"] = shifts[s]
-                        shift_counts[shifts[s]] += 1
-            
-            # 把统计数据加到表格后面，方便你检查是否平衡
-            for s in shifts:
-                 if "休" not in s:
-                    row[f"{s}统计"] = shift_counts[s]
-            
-            data.append(row)
-        return pd.DataFrame(data), solver.StatusName(status)
+                        row_data[f"第{d+1}天"] = shifts[s]
+            data.append(row_data)
+        return pd.DataFrame(data), "成功"
     else:
-        return None, "无解"
+        return None, "冲突"
 
-# --- 运行按钮 ---
+# --- 运行区 ---
 st.markdown("###")
-if st.button("🚀 生成优化排班表", type="primary"):
-    with st.spinner("AI 正在进行数万次组合计算..."):
-        result_df, status_msg = solve_schedule_v2()
+if st.button("🚀 生成 V3 排班表", type="primary"):
+    with st.spinner("AI 正在根据表格需求进行精密计算..."):
+        result_df, msg = solve_schedule_v3()
         
         if result_df is not None:
-            st.success(f"✅ 排班完成！状态: {status_msg}")
+            st.success(f"✅ 排班完成！所有人的休息天数都已确保为 {target_off_days} 天。")
             
-            # 样式优化：高亮显示 '休'
-            def highlight_off(val):
-                color = '#d4edda' if "休" in str(val) else ''
-                return f'background-color: {color}'
+            # 颜色标记
+            def color_map(val):
+                if off_shift_name in str(val): return 'background-color: #d1e7dd; color: #0f5132' # 绿色
+                if "晚" in str(val): return 'background-color: #fff3cd; color: #664d03' # 黄色
+                return ''
+                
+            st.dataframe(result_df.style.applymap(color_map), use_container_width=True)
             
-            st.dataframe(result_df.style.applymap(highlight_off), use_container_width=True)
-            
-            # 下载
+            # 导出
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 result_df.to_excel(writer, index=False)
-            st.download_button("📥 下载 Excel", output.getvalue(), "排班表.xlsx")
+            st.download_button("📥 下载 Excel", output.getvalue(), "排班表_V3.xlsx")
         else:
-            st.error("❌ 无法找到满足所有硬约束的方案。建议：1. 增加员工人数；2. 减少每日最少值班人数；3. 允许晚转早。")
+            st.error("❌ 排班失败：约束冲突！")
+            st.warning("""
+            可能的原因：
+            1. 指定的休息日太多，导致没法凑够上班人数。
+            2. 某个员工拒绝了所有班次。
+            3. 请检查'指定休息日'是否和'最少在岗人数'打架了。
+            """)
