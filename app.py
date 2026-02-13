@@ -6,7 +6,7 @@ import datetime
 import math
 
 # --- 0. 页面配置 ---
-st.set_page_config(page_title="智能排班 V18.0 (终极全能版)", layout="wide", page_icon="💎")
+st.set_page_config(page_title="智能排班 V19.0 (紧急修复版)", layout="wide", page_icon="💎")
 
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
@@ -76,7 +76,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("💎 智能排班 V18.0 - 终极全能版")
+st.title("💎 智能排班 V19.0 - 紧急修复版")
 
 # --- 工具函数 ---
 def get_date_tuple(start_date, end_date):
@@ -113,7 +113,7 @@ with st.sidebar:
 # --- 2. 顶部逻辑 ---
 col_logic_1, col_logic_2 = st.columns(2)
 with col_logic_1:
-    with st.expander("⚖️ 平衡性与波动阈值 (已修复)", expanded=True):
+    with st.expander("⚖️ 平衡性与波动阈值", expanded=True):
         st.info("💡 系统会尽量把差异控制在以下范围内，如果超出，审计日志会报错。")
         p1, p2 = st.columns(2)
         # 小问号回归
@@ -222,20 +222,20 @@ with col_req:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 5. 核心算法 ---
-def solve_schedule_v18():
+def solve_schedule_v19():
     model = cp_model.CpModel()
     shift_vars = {}
     s_map = {s: i for i, s in enumerate(shifts)}
     off_idx = s_map[off_shift_name]
     penalties = []
     
-    # === 权重体系 (调高平衡性) ===
+    # === 权重体系 ===
     W_ACTIVITY = 10000000
-    W_DAILY_BALANCE = 5000000 # 每日波动权重极高
+    W_DAILY_BALANCE = 5000000 
     W_CONSECUTIVE = 2000000
     W_BASELINE = 1000000
     W_REST_STRICT = 500000
-    W_PERIOD_BALANCE = 100000 # 工时平衡权重
+    W_PERIOD_BALANCE = 100000
     W_FATIGUE = 50000
     W_REFUSE = 20000
 
@@ -321,41 +321,45 @@ def solve_schedule_v18():
             cnt = sum(shift_vars[(idx, d, rd_idx)] for d in range(num_days))
             penalties.append(cnt * 100)
 
-        # 指定休息日 (惩罚回归)
+        # 指定休息日
         req_off = str(row["指定休息日"])
         if req_off.strip():
             try:
                 days = [int(x)-1 for x in req_off.replace("，",",").split(",") if x.strip().isdigit()]
                 for d in days:
                     if 0 <= d < num_days:
-                        # 没休则罚 5万
                         is_work = model.NewBoolVar(f'vio_off_{idx}_{d}')
                         model.Add(shift_vars[(idx, d, off_idx)] == 0).OnlyEnforceIf(is_work)
                         model.Add(shift_vars[(idx, d, off_idx)] == 1).OnlyEnforceIf(is_work.Not())
                         penalties.append(is_work * 50000)
             except: pass
 
-    # S6. 强力平衡 (Max - Min <= Threshold)
+    # S6. 强力平衡 (BUG FIX HERE)
     for s_name in shift_work:
         if min_staff_per_shift.get(s_name, 0) == 0: continue
         s_idx = s_map[s_name]
         
-        # 每日波动
+        # 1. 每日波动修复
         d_counts = [sum(shift_vars[(e, d, s_idx)] for e in range(len(employees))) for d in range(num_days)]
-        max_d, min_d = model.NewIntVar(0, len(employees), '')
-        min_d = model.NewIntVar(0, len(employees), '')
+        # 必须分两行定义IntVar
+        max_d = model.NewIntVar(0, len(employees), f'max_d_{s_name}')
+        min_d = model.NewIntVar(0, len(employees), f'min_d_{s_name}')
         model.AddMaxEquality(max_d, d_counts)
         model.AddMinEquality(min_d, d_counts)
-        excess_d = model.NewIntVar(0, len(employees), '')
+        
+        excess_d = model.NewIntVar(0, len(employees), f'ex_d_{s_name}')
         model.Add(excess_d >= (max_d - min_d) - diff_daily_threshold)
         penalties.append(excess_d * W_DAILY_BALANCE)
 
-        # 员工差异
+        # 2. 员工公平修复
         e_counts = [sum(shift_vars[(e, d, s_idx)] for d in range(num_days)) for e in range(len(employees))]
-        max_e, min_e = model.NewIntVar(0, num_days, ''), model.NewIntVar(0, num_days, '')
+        # 必须分两行定义IntVar
+        max_e = model.NewIntVar(0, num_days, f'max_e_{s_name}')
+        min_e = model.NewIntVar(0, num_days, f'min_e_{s_name}')
         model.AddMaxEquality(max_e, e_counts)
         model.AddMinEquality(min_e, e_counts)
-        excess_e = model.NewIntVar(0, num_days, '')
+        
+        excess_e = model.NewIntVar(0, num_days, f'ex_e_{s_name}')
         model.Add(excess_e >= (max_e - min_e) - diff_period_threshold)
         penalties.append(excess_e * W_PERIOD_BALANCE)
 
@@ -365,10 +369,10 @@ def solve_schedule_v18():
     status = solver.Solve(model)
 
     if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-        # --- 6. 全维度审计逻辑 (功能回归) ---
+        # --- 6. 全维度审计逻辑 ---
         audit_logs = []
         
-        res_matrix = []
+        res_matrix = [] 
         name_map = {name: i for i, name in enumerate(employees)}
 
         for e in range(len(employees)):
@@ -418,7 +422,7 @@ def solve_schedule_v18():
                 rest_fail += 1
         if rest_fail == 0: audit_logs.append(f"<div class='log-item log-pass'>✅ 全员休息天数达标 ({target_off_days}天)</div>")
 
-        # 4. 指定休息日 (回归)
+        # 4. 指定休息日
         audit_logs.append("<div class='log-header'>4. 🧘 指定休息日检测</div>")
         spec_rest_fail = 0
         for idx, row in edited_df.iterrows():
@@ -439,7 +443,7 @@ def solve_schedule_v18():
                 except: pass
         if spec_rest_fail == 0: audit_logs.append("<div class='log-item log-pass'>✅ 指定休息日全部满足</div>")
 
-        # 5. 每日平衡 (回归)
+        # 5. 每日平衡
         audit_logs.append("<div class='log-header'>5. ⚖️ 每日平衡检测</div>")
         for s_name in shift_work:
             if min_staff_per_shift.get(s_name, 0) == 0: continue
@@ -453,7 +457,7 @@ def solve_schedule_v18():
             else:
                  audit_logs.append(f"<div class='log-item log-pass'>✅ {s_name}: 波动 {diff} (达标)</div>")
 
-        # 6. 工时公平 (回归)
+        # 6. 工时公平
         audit_logs.append("<div class='log-header'>6. ⚖️ 工时公平检测</div>")
         for s_name in shift_work:
             e_counts = []
@@ -465,6 +469,20 @@ def solve_schedule_v18():
                 audit_logs.append(f"<div class='log-item log-err'>❌ {s_name}: 差异 {diff} (阈值 {diff_period_threshold})</div>")
             else:
                 audit_logs.append(f"<div class='log-item log-pass'>✅ {s_name}: 差异 {diff} (达标)</div>")
+
+        # 7. 连班检测
+        audit_logs.append("<div class='log-header'>7. 🔄 连班检测</div>")
+        cons_fail = 0
+        for e_idx, e_name in enumerate(employees):
+            curr = 0; m_c = 0
+            for d in range(num_days):
+                if res_matrix[e_idx][d] != off_shift_name: curr+=1
+                else: curr=0
+                m_c = max(m_c, curr)
+            if m_c > max_consecutive:
+                audit_logs.append(f"<div class='log-item log-err'>❌ {e_name} 连班 {m_c} 天 (限 {max_consecutive})</div>")
+                cons_fail += 1
+        if cons_fail == 0: audit_logs.append(f"<div class='log-item log-pass'>✅ 连班检测通过 (上限 {max_consecutive})</div>")
 
         # 数据构建
         data_rows = []
@@ -496,8 +514,8 @@ def solve_schedule_v18():
 
 # --- 6. 执行 ---
 if generate_btn:
-    with st.spinner("🚀 AI 正在运算 (V18 Core)..."):
-        df, logs = solve_schedule_v18()
+    with st.spinner("🚀 AI 正在运算 (V19 Core)..."):
+        df, logs = solve_schedule_v19()
         st.session_state.result_df = df
         st.session_state.audit_report = logs
 
