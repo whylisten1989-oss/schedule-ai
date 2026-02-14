@@ -244,7 +244,19 @@ def solve_schedule_v19():
         for d in range(num_days):
             for s in range(len(shifts)):
                 shift_vars[(e, d, s)] = model.NewBoolVar(f's_{e}_{d}_{s}')
+                
+    # --- 0. 预处理：找出哪些天有活动 (为了实现基线智能让路) ---
+    # 只要这天有活动需求，就标记为“战时状态”
+    activity_day_indices = set()
+    for idx, row in edited_activity.iterrows():
+        if row["日期"] and row["指定班次"]:
+            try:
+                # 找到这天在日期列表里的索引 (0, 1, 2...)
+                d_idx = date_headers_simple.index(row["日期"])
+                activity_day_indices.add(d_idx)
+            except: pass
 
+    
     # H1. 物理约束
     for e in range(len(employees)):
         for d in range(num_days):
@@ -267,13 +279,36 @@ def solve_schedule_v19():
             model.Add(sum(window) <= max_consecutive).OnlyEnforceIf(is_violation.Not())
             penalties.append(is_violation * W_CONSECUTIVE)
 
-   # S1. 每日基线 (已修改为硬约束)
-    # 逻辑：实际人数 必须 >= 最少人数。少一个都不行，直接无解报错。
+   # S1. 每日基线 (V23 终极版: 智能条件硬约束)
+    # 逻辑：
+    # 1. 平时 (无活动日): 硬约束。必须达标，少一人都不行。
+    # 2. 战时 (有活动日): 软约束(权重1000万)。给活动让路，避免无解。
+    # ----------------------------------------------------------
+    W_BASELINE_FLEX = 10000000 # 战时权重：一千万分，依然很高，但可以被牺牲
+    
     for d in range(num_days):
+        # 判断今天是不是“战时”
+        is_war_time = (d in activity_day_indices)
+        
         for s_name, min_val in min_staff_per_shift.items():
-            if min_val > 0: # 只有大于0才检查，等于0已经在H2处理了
+            if min_val > 0:
                 s_idx = s_map[s_name]
-                model.Add(sum(shift_vars[(e, d, s_idx)] for e in range(len(employees))) >= min_val)
+                # 计算实际安排的人数
+                actual = sum(shift_vars[(e, d, s_idx)] for e in range(len(employees)))
+                
+                if not is_war_time:
+                    # 【平时】：硬约束！
+                    # 没有活动的日子，必须严守基线，少一个人直接报错。
+                    model.Add(actual >= min_val)
+                else:
+                    # 【战时】：智能降级为软约束。
+                    # 有活动的日子，虽然也想守基线，但如果人被活动抢光了，允许基线不达标。
+                    shortage = model.NewIntVar(0, len(employees), f'short_{d}_{s_name}')
+                    # shortage = 目标 - 实际 (如果实际够了，shortage就是0)
+                    model.Add(shortage >= min_val - actual)
+                    model.Add(shortage >= 0)
+                    # 只有在缺人的时候才罚分
+                    penalties.append(shortage * W_BASELINE_FLEX)
 
     # S2. 休息模式
     for e in range(len(employees)):
