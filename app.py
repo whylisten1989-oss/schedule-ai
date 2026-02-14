@@ -122,13 +122,19 @@ with col_logic_1:
 with col_logic_2:
     with st.expander("📜 查看底层逻辑权重"):
         st.markdown("""
-        1. 🔥 **活动需求** (硬约束)
+        1. 🔥 **活动/大促需求** (硬约束)
         2. 🚫 **0排班禁令** (硬约束)
+        3. 🚫 **每日班次基准线** (硬约束)
+        4. 🚫 **周期内休息日安排** (硬约束)
         3. ⚖️ **每日波动** (5,000,000) - *强力抹平*
-        4. ⚖️ **工时平衡** (100,000) - *强力平均*
         5. 🔄 **最大连班** (2,000,000) - *红线*
         6. 🧱 **每日基线** (1,000,000) - *保运营*
         7. 🛌 **休息模式** (500,000) - *保休息*
+        7. ⚖️ **工时平衡** (100,000) - *强力平均*
+        8. ⚖️ **指定休息日** (50,000) - *会在硬约束下失效*
+        8. ⚖️ **禁止晚转早** (50,000) - *会在活动需求下失效*
+        8. ⚖️ **个人拒绝班次** (20,000) - 
+        8. ⚖️ **个人减少班次** (1000) - 
         """)
 
 # --- 3. 主控制区 ---
@@ -575,7 +581,7 @@ if generate_btn:
     st.session_state.result_df = None
     st.session_state.audit_report = []
 if generate_btn:
-    with st.spinner("🚀 AI 正在运算 (V19 Core)..."):
+    with st.spinner("🚀 AI 正在运算 (V21 Core)..."):
         df, logs = solve_schedule_v19()
         st.session_state.result_df = df
         st.session_state.audit_report = logs
@@ -603,5 +609,5 @@ if st.session_state.result_df is not None:
     df_exp.columns = [f"{c[0]}\n{c[1]}" if "信息" not in c[0] else c[1] for c in st.session_state.result_df.columns]
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_exp.to_excel(writer, index=False)
-    st.download_button("📥 导出 Excel", output.getvalue(), "智能排班_V18.xlsx")
+    st.download_button("📥 导出 Excel", output.getvalue(), "智能排班系统_V18.xlsx")
     st.markdown('</div>', unsafe_allow_html=True)
