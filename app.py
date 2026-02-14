@@ -197,7 +197,7 @@ col_base, col_req = st.columns([1, 2.5])
 
 with col_base:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
-    st.markdown('<div class="card-title">🧱 每日班次基线</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">🧱 每日班次基线-最低人数设定</div>', unsafe_allow_html=True)
     min_staff_per_shift = {}
     for s in shift_work:
         # 小问号回归
