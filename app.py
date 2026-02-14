@@ -20,6 +20,23 @@ st.markdown("""
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         background-color: #f7f9fc;
     }
+
+
+    /* 强制所有表格(包括编辑框 stDataEditor) 内容居中 */
+    div[data-testid="stDataFrame"] div[role="gridcell"],
+    div[data-testid="stDataFrame"] div[role="columnheader"],
+    div[data-testid="stDataEditor"] div[role="gridcell"],
+    div[data-testid="stDataEditor"] div[role="columnheader"] {
+        justify-content: center !important;
+        text-align: center !important;
+    }
+    
+    /* 修复输入框在居中后的显示问题 */
+    div[data-testid="stDataEditor"] input {
+        text-align: center !important;
+    }
+
+
     
     /* 卡片布局 */
     .css-card {
