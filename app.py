@@ -22,21 +22,6 @@ st.markdown("""
     }
 
 
-    /* 强制所有表格(包括编辑框 stDataEditor) 内容居中 */
-    div[data-testid="stDataFrame"] div[role="gridcell"],
-    div[data-testid="stDataFrame"] div[role="columnheader"],
-    div[data-testid="stDataEditor"] div[role="gridcell"],
-    div[data-testid="stDataEditor"] div[role="columnheader"] {
-        justify-content: center !important;
-        text-align: center !important;
-    }
-    
-    /* 修复输入框在居中后的显示问题 */
-    div[data-testid="stDataEditor"] input {
-        text-align: center !important;
-    }
-
-
     
     /* 卡片布局 */
     .css-card {
@@ -52,6 +37,20 @@ st.markdown("""
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div, .stTextArea>div>div>textarea {
         border-radius: 6px; border: 1px solid #cbd5e0;
     }
+
+   /* 强制表头居中 (Input Table Headers) */
+    div[data-testid="stDataEditor"] div[role="columnheader"] {
+        justify-content: center !important;
+        text-align: center !important;
+    }
+    
+    /* 结果表 (Output Table) 强制居中 */
+    div[data-testid="stDataFrame"] div[role="gridcell"],
+    div[data-testid="stDataFrame"] div[role="columnheader"] {
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
     
     /* 生成按钮 */
     .stButton > button {
@@ -207,7 +206,7 @@ with col_base:
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown("###")
-    generate_btn = st.button("🚀 立即执行智能排班")
+    generate_btn = st.button("🚀 开始AI智能排班")
 
 with col_req:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
@@ -606,6 +605,8 @@ if generate_btn:
 if st.session_state.result_df is not None:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">📋 审计日志 & 排班结果</div>', unsafe_allow_html=True)
+
+    st.session_state.result_df.index = range(1, len(st.session_state.result_df) + 1)
     
     # 审计日志区
     log_html = "<div class='audit-container'>" + "".join(st.session_state.audit_report) + "</div>"
