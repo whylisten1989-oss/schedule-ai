@@ -21,7 +21,10 @@ st.markdown("""
         background-color: #f7f9fc;
     }
 
-
+/* 隐藏底部的 "Built with Streamlit" */
+    footer {
+        visibility: hidden;
+    }
     
     /* 卡片布局 */
     .css-card {
