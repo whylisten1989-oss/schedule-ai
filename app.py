@@ -623,7 +623,7 @@ if st.session_state.result_df is not None:
         if "【" in s: return 'font-weight: bold; background-color: #ebf8ff; color: #2b6cb0'
         return ''
     
-    st.dataframe(st.session_state.result_df.style.applymap(style_map), use_container_width=True, height=600)
+    st.dataframe(st.session_state.result_df.style.map(style_map), use_container_width=True, height=600)
     
     output = io.BytesIO()
     df_exp = st.session_state.result_df.copy()
